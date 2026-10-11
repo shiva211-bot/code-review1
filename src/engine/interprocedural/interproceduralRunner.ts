@@ -43,6 +43,11 @@ export interface InterproceduralReport {
   failedCases: number;
   detectionScorePercent: number;
   status: AnalysisConvergenceStatus;
+  /**
+   * @deprecated Legacy alias for physical fixed-point convergence across all test runs.
+   * Prefer using `allAnalysesConverged` for physical convergence, or `suiteExpectationsMet`
+   * for whether all tests met their expected outcome and convergence status.
+   */
   converged: boolean;
   allAnalysesConverged: boolean;
   suiteExpectationsMet: boolean;
@@ -251,7 +256,7 @@ export function runInterproceduralVerificationSuite(): InterproceduralReport {
     failedCases: INTERPROCEDURAL_CORPUS.length - passedCount,
     detectionScorePercent,
     status: allPhysicallyConverged ? 'converged' : 'resource_limit_exceeded',
-    converged: suiteExpectationsMet,
+    converged: allPhysicallyConverged,
     allAnalysesConverged: allPhysicallyConverged,
     suiteExpectationsMet,
     totalStepsEvaluated,
