@@ -73,6 +73,18 @@ export const KNOWN_SANITIZERS: SanitizerDefinition[] = [
     validContexts: ['SQL_QUERY'],
     description: 'SQL string escaping function. Valid ONLY in SQL query contexts.',
   },
+  {
+    name: 'path.basename',
+    neutralizesThreats: ['PATH_TRAVERSAL'],
+    validContexts: ['PATH_RESOLVE'],
+    description: 'Extracts the file name portion of a path, stripping leading directory traversal sequences (../).',
+  },
+  {
+    name: 'basename',
+    neutralizesThreats: ['PATH_TRAVERSAL'],
+    validContexts: ['PATH_RESOLVE'],
+    description: 'Path basename extraction function, neutralizing directory traversal.',
+  },
 ];
 
 // Standard language / runtime built-in sanitizers that are always available globally
@@ -84,6 +96,8 @@ export const STANDARD_BUILTIN_SANITIZERS = new Set<string>([
   'math.round',
   'math.ceil',
   'encodeuricomponent',
+  'path.basename',
+  'basename',
 ]);
 
 export function lookupSanitizer(name: string): SanitizerDefinition | undefined {

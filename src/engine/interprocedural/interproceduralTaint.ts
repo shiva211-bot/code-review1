@@ -954,6 +954,14 @@ export function runFlowSensitiveInterproceduralAnalysis(
             const targetScope = getDeclarationScope(scope, stmt.kind);
             targetScope.declarations.add(varName);
             const varKey = `${targetScope.id}::${varName}`;
+
+            let initCall: any = null;
+            if (init?.type === 'CallExpression') initCall = init;
+            else if (init?.type === 'AwaitExpression' && init.argument?.type === 'CallExpression') initCall = init.argument;
+            if (initCall) {
+              checkSinkInvocation(initCall, currentEnv, scope, callStack);
+            }
+
             const evalVal = evaluateExpression(init, currentEnv, scope, callStack);
 
             if (evalVal && evalVal.isTainted) {
@@ -1038,6 +1046,14 @@ export function runFlowSensitiveInterproceduralAnalysis(
               globalScope.declarations.add(leftName);
             }
             const varKey = resolveVarKey(scope, leftName);
+
+            let rightCall: any = null;
+            if (expr.right?.type === 'CallExpression') rightCall = expr.right;
+            else if (expr.right?.type === 'AwaitExpression' && expr.right.argument?.type === 'CallExpression') rightCall = expr.right.argument;
+            if (rightCall) {
+              checkSinkInvocation(rightCall, currentEnv, scope, callStack);
+            }
+
             const evalVal = evaluateExpression(expr.right, currentEnv, scope, callStack);
 
             if (evalVal && evalVal.isTainted) {
@@ -1369,10 +1385,17 @@ export function runFlowSensitiveInterproceduralAnalysis(
       sinkContext = 'HTML_BODY';
       sinkThreat = 'XSS';
     }
-    // 3. JavaScript Execution Sinks (eval, Function)
+    // 3. JavaScript Execution Sinks (eval, Function, setTimeout/setInterval with string)
     else if (methodName === 'eval' || methodName === 'function') {
       sinkContext = 'JAVASCRIPT_CONTEXT';
       sinkThreat = 'XSS';
+    }
+    else if ((methodName === 'settimeout' || methodName === 'setinterval') && callNode.arguments?.length > 0) {
+      const firstArg = callNode.arguments[0];
+      if (firstArg.type !== 'FunctionExpression' && firstArg.type !== 'ArrowFunctionExpression') {
+        sinkContext = 'JAVASCRIPT_CONTEXT';
+        sinkThreat = 'XSS';
+      }
     }
     // 4. URL Sinks (window.open, location.href, setAttribute)
     else if (methodName === 'open' || (objectName === 'location' && methodName === 'href')) {

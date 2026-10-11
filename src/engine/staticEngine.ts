@@ -1,11 +1,11 @@
 import { parseSourceCode } from './ast/parser';
 import { buildControlFlowGraph } from './cfg/controlFlow';
 import { performTaintAnalysis } from './taint/taintTracker';
-import { performInterproceduralTaintAnalysis } from './interprocedural/interproceduralTaint';
+import { runFlowSensitiveInterproceduralAnalysis } from './interprocedural/interproceduralTaint';
 import { calculateHalsteadMetrics, calculateMaintainabilityIndex, calculateCognitiveComplexity } from './metrics/halstead';
 import { runStaticRules } from './rules/ruleRegistry';
 import { ComprehensiveStaticAnalysis, ASTNode } from './ast/types';
-import { AnalysisResult, CodeFinding, CodeMetrics } from '../types';
+import { AnalysisResult, CodeFinding, CodeMetrics, StaticRiskLevel } from '../types';
 
 export function executeTrueStaticAnalysis(
   code: string,
@@ -24,7 +24,9 @@ export function executeTrueStaticAnalysis(
 
   // 3. Local & Interprocedural Taint Data Flow Analysis (Source to Sink)
   const taintVulns = performTaintAnalysis(ast, code);
-  const interprocVulns = performInterproceduralTaintAnalysis(ast, filename);
+  const interprocAnalysis = runFlowSensitiveInterproceduralAnalysis(ast, filename);
+  const interprocVulns = interprocAnalysis.vulnerabilities;
+  const isInconclusive = !interprocAnalysis.converged || interprocAnalysis.status === 'resource_limit_exceeded';
 
   // 4. Formal Software Science Metrics
   const halstead = calculateHalsteadMetrics(tokens, code);
@@ -112,12 +114,29 @@ export function executeTrueStaticAnalysis(
     });
   });
 
+  // Add conservative incomplete analysis warning if resource limit reached
+  if (isInconclusive) {
+    findings.push({
+      id: `analysis-status-${findingCounter++}`,
+      title: 'INCOMPLETE_ANALYSIS: Resource Budget Limit Reached (Inconclusive Result)',
+      severity: 'high',
+      category: 'reliability',
+      line: 1,
+      impact: 'The interprocedural analysis reached its iteration limit before completing fixed-point convergence. Potential vulnerability flows along unverified recursive or deep call paths cannot be ruled out.',
+      description: `Analysis halted after ${interprocAnalysis.iterations} iterations with status '${interprocAnalysis.status}'. In accordance with conservative verification soundness, absence of detected findings cannot be interpreted as safety.`,
+      recommendation: 'Increase iteration limit or inspect complex recursion. Do not assume unanalyzed code paths are safe.',
+    });
+  }
+
   // Calculate scores based on AST metrics
   const criticalCount = findings.filter(f => f.severity === 'critical').length;
   const highCount = findings.filter(f => f.severity === 'high').length;
   const mediumCount = findings.filter(f => f.severity === 'medium').length;
 
-  const securityScore = Math.max(10, 100 - (criticalCount * 35 + highCount * 18 + mediumCount * 6));
+  let securityScore = Math.max(10, 100 - (criticalCount * 35 + highCount * 18 + mediumCount * 6));
+  if (isInconclusive && securityScore > 75) {
+    securityScore = 75; // Conservative cap: incomplete analysis cannot claim perfect security
+  }
   const performanceScore = Math.max(15, 100 - (criticalCount * 25 + highCount * 20 + mediumCount * 8));
   const efficiencyScore = Math.max(20, Math.min(100, Math.round((performanceScore * 0.7) + (maintainabilityIndex * 0.3))));
   const overallScore = Math.round((securityScore * 0.35) + (performanceScore * 0.35) + (maintainabilityIndex * 0.15) + (efficiencyScore * 0.15));
@@ -137,8 +156,11 @@ export function executeTrueStaticAnalysis(
     bigOSpace = 'O(N)';
   }
 
-  // Static Risk Level (Deterministic Static Rule Analysis, no synthetic runtime execution telemetry)
-  const staticRiskEstimate = criticalCount > 0 ? 'CRITICAL' : highCount > 0 ? 'HIGH' : mediumCount > 0 ? 'MODERATE' : 'LOW';
+  // Static Risk Level (Conservative Soundness: Incomplete analysis must NEVER yield LOW risk)
+  let staticRiskEstimate: StaticRiskLevel = criticalCount > 0 ? 'CRITICAL' : highCount > 0 ? 'HIGH' : mediumCount > 0 ? 'MODERATE' : 'LOW';
+  if (isInconclusive && staticRiskEstimate === 'LOW') {
+    staticRiskEstimate = 'INCONCLUSIVE';
+  }
   const rulesPassedPercent = Math.round((ruleResults.filter(r => r.passed).length / Math.max(1, ruleResults.length)) * 100);
 
   const metrics: CodeMetrics = {
@@ -152,6 +174,8 @@ export function executeTrueStaticAnalysis(
     staticRiskEstimate,
     cyclomaticComplexity,
     rulesPassedPercent,
+    isInconclusive,
+    incompleteReason: isInconclusive ? `Resource limit reached (${interprocAnalysis.iterations} iterations).` : undefined,
   };
 
   const durationMs = Math.round(performance.now() - startTime);
@@ -174,14 +198,29 @@ export function executeTrueStaticAnalysis(
       blank: blankLines.length,
     },
     ruleResults,
+    interproceduralAnalysis: {
+      iterations: interprocAnalysis.iterations,
+      converged: interprocAnalysis.converged,
+      status: interprocAnalysis.status,
+      unresolvedCallsCount: interprocAnalysis.unresolvedCallsCount,
+      flowSensitiveStepsEvaluated: interprocAnalysis.flowSensitiveStepsEvaluated,
+      isInconclusive,
+    },
+    isInconclusive,
+    incompleteAnalysisWarning: isInconclusive
+      ? `INCOMPLETE_ANALYSIS: Resource limit reached (${interprocAnalysis.iterations} iterations). Safety cannot be inferred.`
+      : undefined,
     analyzedAt: new Date().toISOString(),
     durationMs,
   };
 
   const remediatedCode = generateASTRemediatedCode(code, findings);
-  const remediationSummary = findings.length > 0
+  let remediationSummary = findings.length > 0
     ? `Eliminated ${criticalCount} critical, ${highCount} high AST violations. Resolved taint source-to-sink injection paths and resource leaks.`
     : 'All AST visitor passes and taint analysis validations passed successfully.';
+  if (isInconclusive) {
+    remediationSummary = `WARNING: INCOMPLETE_ANALYSIS. Interprocedural analysis halted due to resource limit (${interprocAnalysis.iterations} iterations). Safety cannot be proven from missing findings. ` + remediationSummary;
+  }
 
   const improvements = findings.map(f => `${f.title}: ${f.recommendation}`);
 
@@ -197,6 +236,11 @@ export function executeTrueStaticAnalysis(
     improvements,
     executionTimeMs: durationMs,
     aiPowered: false,
+    analysisStatus: interprocAnalysis.status,
+    isInconclusive,
+    incompleteAnalysisWarning: isInconclusive
+      ? `INCOMPLETE_ANALYSIS: Fixed-point convergence was not reached (${interprocAnalysis.iterations} iterations). Safety cannot be inferred from absent findings.`
+      : undefined,
   };
 
   return { analysis, engineData };

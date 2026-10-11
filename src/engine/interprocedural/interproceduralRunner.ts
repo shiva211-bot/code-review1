@@ -31,6 +31,10 @@ export interface InterproceduralTestResult {
   sanitizerVerified: boolean;
   pathSequenceVerified: boolean;
   dataFlowStateVerified: boolean;
+  analysisStatus: AnalysisConvergenceStatus;
+  converged: boolean;
+  isInconclusive: boolean;
+  inconclusiveReason?: string;
   failureReason?: string;
   failureReasons?: string[];
   durationMs: number;
@@ -219,6 +223,11 @@ export function runInterproceduralVerificationSuite(): InterproceduralReport {
 
     const verificationMode = primaryVuln ? 'EXACT_TRACE' : 'STATE_AND_ABSENCE';
 
+    const isInconclusive = !analysisRes.converged;
+    const inconclusiveReason = isInconclusive
+      ? `Analysis resource limit reached (${analysisRes.iterations} iterations). Incomplete analysis cannot establish safety; unverified safe assertion rejected.`
+      : undefined;
+
     results.push({
       testId: testCase.id,
       testName: testCase.name,
@@ -240,6 +249,10 @@ export function runInterproceduralVerificationSuite(): InterproceduralReport {
       sanitizerVerified,
       pathSequenceVerified,
       dataFlowStateVerified,
+      analysisStatus: analysisRes.status,
+      converged: analysisRes.converged,
+      isInconclusive,
+      inconclusiveReason,
       failureReason: failureReasons.length > 0 ? failureReasons.join(' | ') : undefined,
       failureReasons: failureReasons.length > 0 ? failureReasons : undefined,
       durationMs: testDuration,

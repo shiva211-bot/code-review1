@@ -1,4 +1,4 @@
-import type { InterproceduralTaintVulnerability } from '../interprocedural/types';
+import type { InterproceduralTaintVulnerability, AnalysisConvergenceStatus } from '../interprocedural/types';
 
 export interface SourceLocation {
   line: number;
@@ -120,6 +120,16 @@ export interface ComprehensiveStaticAnalysis {
     blank: number;
   };
   ruleResults: StaticRuleResult[];
+  interproceduralAnalysis?: {
+    iterations: number;
+    converged: boolean;
+    status: AnalysisConvergenceStatus;
+    unresolvedCallsCount: number;
+    flowSensitiveStepsEvaluated: number;
+    isInconclusive: boolean;
+  };
+  isInconclusive?: boolean;
+  incompleteAnalysisWarning?: string;
   analyzedAt: string;
   durationMs: number;
 }

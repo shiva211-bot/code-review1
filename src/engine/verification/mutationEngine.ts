@@ -4,7 +4,19 @@ export interface AdversarialCase {
   id: string;
   ruleId: string;
   name: string;
-  category: 'adversarial_bypass' | 'placeholder_style' | 'aliased_client' | 'non_sql_method' | 'nested_expression' | 'redos_variation' | 'proto_pollution_trick';
+  category: 
+    | 'adversarial_bypass' 
+    | 'placeholder_style' 
+    | 'aliased_client' 
+    | 'non_sql_method' 
+    | 'nested_expression' 
+    | 'redos_variation' 
+    | 'proto_pollution_trick'
+    | 'nested_control_flow'
+    | 'exception_handling'
+    | 'aliased_variable'
+    | 'closure_capture'
+    | 'dynamic_property';
   mutatedCode: string;
   expectedViolated: boolean;
   description: string;
@@ -389,6 +401,135 @@ export function generateAdversarialMutants(): AdversarialCase[] {
       mutatedCode: `useEffect(() => {\n  const id_${i} = setInterval(() => { console.log(${i}); }, 1000);\n  return () => clearInterval(id_${i});\n}, []);`,
     });
   }
+
+  // =========================================================================
+  // 5. ADVERSARIAL: NESTED CONTROL FLOW & EXCEPTION HANDLING (4 Cases)
+  // =========================================================================
+  cases.push({
+    id: `ADV-CTRL-FLOW-${id++}`,
+    ruleId: 'SEC-001-SQLI',
+    name: 'Nested If/Else Dynamic Query in Deep Branch',
+    category: 'nested_control_flow',
+    expectedViolated: true,
+    description: 'Dynamic concatenation deeply nested inside if/else branches.',
+    mutatedCode: `if (conditionA) { if (conditionB) { await db.query('SELECT * FROM users WHERE role = ' + req.query.role); } }`,
+  });
+
+  cases.push({
+    id: `ADV-CTRL-FLOW-${id++}`,
+    ruleId: 'SEC-001-SQLI',
+    name: 'Nested Switch/Case with Parameterized Bindings (Safe)',
+    category: 'nested_control_flow',
+    expectedViolated: false,
+    description: 'Prepared statements inside nested switch/case branches are recognized as safe.',
+    mutatedCode: `switch (mode) { case 'user': await db.query('SELECT * FROM users WHERE id = ?', [id]); break; }`,
+  });
+
+  cases.push({
+    id: `ADV-EXCEPT-${id++}`,
+    ruleId: 'SEC-001-SQLI',
+    name: 'Try/Catch/Finally SQL Injection in Exception Handler',
+    category: 'exception_handling',
+    expectedViolated: true,
+    description: 'Dynamic query executed inside catch block during error recovery.',
+    mutatedCode: `try { doSomething(); } catch (err) { await db.query('INSERT INTO error_logs VALUES (' + err.message + ')'); }`,
+  });
+
+  cases.push({
+    id: `ADV-EXCEPT-${id++}`,
+    ruleId: 'SEC-001-SQLI',
+    name: 'Try/Catch with Parameterized Query (Safe)',
+    category: 'exception_handling',
+    expectedViolated: false,
+    description: 'Parameterized query inside try/catch block remains safe.',
+    mutatedCode: `try { await db.query('INSERT INTO logs (msg) VALUES (?)', [msg]); } catch (e) { console.error(e); }`,
+  });
+
+  // =========================================================================
+  // 6. ADVERSARIAL: ALIASED VARIABLE CHAINS & CLOSURES (4 Cases)
+  // =========================================================================
+  cases.push({
+    id: `ADV-ALIAS-CHAIN-${id++}`,
+    ruleId: 'SEC-001-SQLI',
+    name: 'Multi-Hop Variable Aliasing Chain (Vulnerable)',
+    category: 'aliased_variable',
+    expectedViolated: true,
+    description: 'Variable aliased across multiple variables before string concatenation.',
+    mutatedCode: `const p1 = req.body.data; const p2 = p1; const p3 = p2; await db.query('SELECT * FROM items WHERE key = ' + p3);`,
+  });
+
+  cases.push({
+    id: `ADV-ALIAS-CHAIN-${id++}`,
+    ruleId: 'SEC-001-SQLI',
+    name: 'Multi-Hop Variable Aliasing Chain with Parameterized Query (Safe)',
+    category: 'aliased_variable',
+    expectedViolated: false,
+    description: 'Aliased variable passed via prepared query binding array.',
+    mutatedCode: `const p1 = req.body.data; const p2 = p1; const p3 = p2; await db.query('SELECT * FROM items WHERE key = ?', [p3]);`,
+  });
+
+  cases.push({
+    id: `ADV-CLOSURE-${id++}`,
+    ruleId: 'SEC-001-SQLI',
+    name: 'Closure Function Capturing Dynamic Query (Vulnerable)',
+    category: 'closure_capture',
+    expectedViolated: true,
+    description: 'Closure encapsulating dynamic query concatenation.',
+    mutatedCode: `function makeQuery(val) { return () => db.query('SELECT * FROM users WHERE id = ' + val); }`,
+  });
+
+  cases.push({
+    id: `ADV-CLOSURE-${id++}`,
+    ruleId: 'SEC-001-SQLI',
+    name: 'Closure Function with Parameterized Query (Safe)',
+    category: 'closure_capture',
+    expectedViolated: false,
+    description: 'Closure encapsulating parameterized prepared query.',
+    mutatedCode: `function makeSafeQuery(id) { return () => db.query('SELECT * FROM users WHERE id = ?', [id]); }`,
+  });
+
+  // =========================================================================
+  // 7. ADVERSARIAL: DYNAMIC PROPERTY ACCESS & REDOS NESTING (4 Cases)
+  // =========================================================================
+  cases.push({
+    id: `ADV-DYNPROP-${id++}`,
+    ruleId: 'SEC-003-PROTO-POLLUTION',
+    name: 'Dynamic Property Write in Loop Without Validation (Vulnerable)',
+    category: 'dynamic_property',
+    expectedViolated: true,
+    description: 'Unvalidated dynamic property assignment inside loop.',
+    mutatedCode: `for (const key of keys) { obj[key] = data[key]; }`,
+  });
+
+  cases.push({
+    id: `ADV-DYNPROP-${id++}`,
+    ruleId: 'SEC-003-PROTO-POLLUTION',
+    name: 'Dynamic Property Write with Key Guard Protection (Safe)',
+    category: 'dynamic_property',
+    expectedViolated: false,
+    description: 'Guarded dynamic property assignment preventing prototype tampering.',
+    mutatedCode: `for (const key of keys) { if (key === '__proto__' || key === 'constructor') continue; obj[key] = data[key]; }`,
+  });
+
+  cases.push({
+    id: `ADV-REDOS-NEST-${id++}`,
+    ruleId: 'SEC-002-REDOS',
+    name: 'ReDoS Regex in Nested Helper Function (Vulnerable)',
+    category: 'nested_control_flow',
+    expectedViolated: true,
+    description: 'Catastrophic backtracking regex declared inside nested helper.',
+    mutatedCode: `function validate() { const pattern = /(a+)+/; return pattern.test(input); }`,
+  });
+
+  cases.push({
+    id: `ADV-REDOS-NEST-${id++}`,
+    ruleId: 'SEC-002-REDOS',
+    name: 'Safe Regex in Nested Helper Function (Safe)',
+    category: 'nested_control_flow',
+    expectedViolated: false,
+    description: 'Linear time regex inside helper function passes without false positive.',
+    mutatedCode: `function validate() { const pattern = /^[a-z0-9]{3,16}$/; return pattern.test(input); }`,
+  });
 
   return cases;
 }

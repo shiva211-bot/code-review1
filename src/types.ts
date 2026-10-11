@@ -16,7 +16,7 @@ export interface CodeFinding {
   suggestedReplacement?: string;
 }
 
-export type StaticRiskLevel = 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW';
+export type StaticRiskLevel = 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW' | 'INCONCLUSIVE';
 
 export interface CodeMetrics {
   overallScore: number; // 0-100
@@ -29,6 +29,8 @@ export interface CodeMetrics {
   staticRiskEstimate: StaticRiskLevel;
   cyclomaticComplexity: number;
   rulesPassedPercent: number;
+  isInconclusive?: boolean;
+  incompleteReason?: string;
 }
 
 export interface AnalysisResult {
@@ -43,6 +45,9 @@ export interface AnalysisResult {
   improvements: string[];
   executionTimeMs: number;
   aiPowered: boolean;
+  analysisStatus?: 'converged' | 'resource_limit_exceeded';
+  isInconclusive?: boolean;
+  incompleteAnalysisWarning?: string;
 }
 
 export interface BenchmarkMetrics {
