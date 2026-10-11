@@ -436,36 +436,40 @@ export function runFlowSensitiveInterproceduralAnalysis(
         };
       }
 
-      // 3B. Property access on object: data.query
-      const objName = expr.object?.name;
-      const propName = expr.property?.name || expr.property?.value;
-      if (objName) {
-        const key = resolveVarKey(scope, objName);
-        const objVal = env.get(key);
-        if (objVal && objVal.isTainted) {
-          if (!objVal.properties || objVal.properties.has(propName)) {
-            const line = expr.loc?.start?.line || 1;
-            const step: InterproceduralPathStep = {
-              stepNumber: objVal.history.length + 1,
-              type: 'PROPERTY_ACCESS',
-              line,
-              function: scope.name !== 'global' ? scope.name : undefined,
-              functionName: scope.name,
-              symbol: `${objName}.${propName}`,
-              description: `Accessed object property '${objName}.${propName}'`,
-            };
+      // 3B. Property access on object or array: data.query, arr[0], user.account.id
+      const propName = expr.property?.name ?? expr.property?.value;
+      const targetObjVal = expr.object?.name
+        ? env.get(resolveVarKey(scope, expr.object.name))
+        : evaluateExpression(expr.object, env, scope, callStack);
 
-            return {
-              isTainted: true,
-              threat: objVal.threat,
-              sanitized: objVal.sanitized,
-              sanitizerStep: objVal.sanitizerStep,
-              isUnresolvedFlow: objVal.isUnresolvedFlow,
-              unresolvedFunction: objVal.unresolvedFunction,
-              history: [...objVal.history, step],
-            };
-          }
+      if (targetObjVal && targetObjVal.isTainted) {
+        if (!targetObjVal.properties || (propName !== undefined && targetObjVal.properties.has(String(propName)))) {
+          const line = expr.loc?.start?.line || 1;
+          const symbolStr = expr.object?.name ? `${expr.object.name}.${propName}` : String(propName || 'prop');
+          const step: InterproceduralPathStep = {
+            stepNumber: targetObjVal.history.length + 1,
+            type: 'PROPERTY_ACCESS',
+            line,
+            function: scope.name !== 'global' ? scope.name : undefined,
+            functionName: scope.name,
+            symbol: symbolStr,
+            description: `Accessed object property '${symbolStr}'`,
+          };
+
+          return {
+            isTainted: true,
+            threat: targetObjVal.threat,
+            sanitized: targetObjVal.sanitized,
+            sanitizerStep: targetObjVal.sanitizerStep,
+            isUnresolvedFlow: targetObjVal.isUnresolvedFlow,
+            unresolvedFunction: targetObjVal.unresolvedFunction,
+            stringValue: targetObjVal.stringValue,
+            numberValue: targetObjVal.numberValue,
+            history: [...targetObjVal.history, step],
+          };
         }
+      } else if (targetObjVal && !targetObjVal.isTainted) {
+        return targetObjVal;
       }
       return null;
     }
@@ -659,6 +663,19 @@ export function runFlowSensitiveInterproceduralAnalysis(
           unresolvedFunction: unresFn,
           history: [...combinedHistory, step],
         };
+      }
+      return null;
+    }
+
+    // 6B. ArrayExpression: [input, safe]
+    if (expr.type === 'ArrayExpression') {
+      const elements = expr.elements || [];
+      for (const el of elements) {
+        if (!el) continue;
+        const elVal = evaluateExpression(el, env, scope, callStack);
+        if (elVal && elVal.isTainted) {
+          return elVal;
+        }
       }
       return null;
     }

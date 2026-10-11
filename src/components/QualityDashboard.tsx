@@ -212,14 +212,14 @@ export const QualityDashboard: React.FC = () => {
           <div className="p-3.5 rounded-lg bg-emerald-950/20 border border-emerald-800/40 text-xs text-slate-300 space-y-1">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-emerald-400 font-mono">
-                Concept 4 — Flow-Sensitive Interprocedural Data-Flow Engine
+                Concept 4 — Flow-Sensitive Interprocedural Data-Flow Engine (Hardened Prototype)
               </span>
               <span className="font-mono text-emerald-300 text-[11px]">
-                {interprocReport.passedCases} / {interprocReport.totalCases} Verified ({interprocReport.detectionScorePercent}%) · Suite Expectations: {interprocReport.suiteExpectationsMet ? 'MET' : 'FAILED'} · Fixed-Point: {interprocReport.allAnalysesConverged ? 'ALL CONVERGED' : 'INTENTIONAL BOUNDS ENFORCED'}
+                {interprocReport.passedCases} / {interprocReport.totalCases} In-Corpus Verified ({interprocReport.detectionScorePercent}%) · Suite Expectations: {interprocReport.suiteExpectationsMet ? 'MET' : 'FAILED'} · Physical Convergence: {interprocReport.allAnalysesConverged ? 'ALL CONVERGED' : 'BOUNDED (INTENTIONAL LIMITS)'}
               </span>
             </div>
             <p className="text-slate-400 text-[11px]">
-              Tracks flow-sensitive taint across call sites, function parameters, return propagation, object methods, destructuring, and verified threat-specific sanitizers. Uses a fixed-point convergence worklist algorithm with rigorous sequence matching.
+              Prototype data-flow verifier tracking flow-sensitive taint across call sites, function parameters, returns, objects, arrays, and verified threat sanitizers via worklist fixed-point analysis. Evaluated against internal regression and adversarial benchmarks; external validation required before production readiness.
             </p>
           </div>
 
