@@ -1274,4 +1274,54 @@ res.send('<div>' + safe + '</div>');`,
       result: { isTainted: true, mustExist: true },
     },
   },
+
+  // =========================================================================
+  // IP-52: Non-Contaminating Terminated Branch in Control-Flow Join
+  // =========================================================================
+  {
+    id: 'IP-52',
+    name: 'Non-Contaminating Terminated Branch (Return in If Branch)',
+    category: 'branch_merging',
+    description: 'When an if branch assigns tainted data and returns, the continuing path after the if must not be contaminated by the terminated branch state.',
+    code: `let data = 'clean_initial';
+if (checkFlag()) {
+  data = req.query.leak;
+  return;
+}
+db.query('SELECT * FROM audit WHERE info = ' + data);`,
+    expectedVulnerable: false,
+    expectedSanitized: false,
+    expectedPathSequence: [],
+    expectedPostState: {
+      data: { isTainted: false, mustExist: true },
+    },
+  },
+
+  // =========================================================================
+  // IP-53: Numeric Constant Sensitivity on Tainted Parameters in Recursion
+  // =========================================================================
+  {
+    id: 'IP-53',
+    name: 'Numeric Constant Sensitivity on Tainted Recursive Parameters',
+    category: 'recursion',
+    description: 'Verifies that numeric constants on tainted values are preserved in parameter signatures and distinguish recursive summaries.',
+    code: `function recTag(val, tag) {
+  if (tag === 0) {
+    return val;
+  }
+  return recTag(val, tag - 1);
+}
+const tainted = req.query.token;
+const res = recTag(tainted, 2);
+db.query(res);`,
+    expectedVulnerable: true,
+    expectedSanitized: false,
+    expectedConfidence: 'confirmed',
+    expectedConvergenceStatus: 'converged',
+    expectedPathSequence: ['SOURCE', 'ARGUMENT', 'PARAMETER', 'RETURN', 'SINK'],
+    expectedPostState: {
+      tainted: { isTainted: true, mustExist: true },
+      res: { isTainted: true, mustExist: true },
+    },
+  },
 ];

@@ -362,7 +362,10 @@ export function runFlowSensitiveInterproceduralAnalysis(
         const strSuffix = a.stringValue !== undefined 
           ? `:str(${encodeURIComponent(a.stringValue.slice(0, 64))})` 
           : '';
-        return `${a.threat}:${a.sanitized ? 'sanitized' : 'tainted'}:${propsStr}${unresStr}${strSuffix}`;
+        const numSuffix = a.numberValue !== undefined
+          ? `:num(${a.numberValue})`
+          : '';
+        return `${a.threat}:${a.sanitized ? 'sanitized' : 'tainted'}:${propsStr}${unresStr}${strSuffix}${numSuffix}`;
       })
       .join('|');
   }
@@ -1147,32 +1150,43 @@ export function runFlowSensitiveInterproceduralAnalysis(
           }
         }
 
-        // Merge ifEnv and elseEnv back into currentEnv using join lattice
-        const allKeys = new Set([...ifEnv.keys(), ...elseEnv.keys(), ...priorEnv.keys()]);
-
-        for (const varKey of allKeys) {
-          const valIf = ifEnv.get(varKey);
-          const valElse = elseEnv.get(varKey);
-
-          const branchStep: InterproceduralPathStep = {
-            stepNumber: 1,
-            type: 'PROPAGATION',
-            line: stmt.loc?.start?.line || 1,
-            function: scope.name !== 'global' ? scope.name : undefined,
-            functionName: scope.name,
-            symbol: varKey.split('::')[1] || varKey,
-            description: `Branch merge: variable '${varKey.split('::')[1]}' flow merged`,
-          };
-
-          let mergedVal: TaintValue | null = null;
-          if (staticCondition === true) {
-            mergedVal = valIf || null;
-          } else if (staticCondition === false) {
-            mergedVal = valElse || null;
+        // Merge environments only from branches that can continue execution
+        if (staticCondition === true) {
+          currentEnv = ifReturned ? priorEnv : ifEnv;
+        } else if (staticCondition === false) {
+          currentEnv = elseReturned ? priorEnv : elseEnv;
+        } else {
+          // Dynamic/unknown condition:
+          if (ifReturned && elseReturned) {
+            // Both paths returned, environment doesn't matter as execution terminates below
+            currentEnv = priorEnv;
+          } else if (ifReturned) {
+            // Consequent returned: only the alternate branch continues execution!
+            currentEnv = elseEnv;
+          } else if (elseReturned) {
+            // Alternate returned: only the consequent branch continues execution!
+            currentEnv = ifEnv;
           } else {
-            mergedVal = joinAbstractValues(valIf || null, valElse || null, branchStep);
+            // Both branches continue: join ifEnv and elseEnv back into currentEnv
+            const allKeys = new Set([...ifEnv.keys(), ...elseEnv.keys(), ...priorEnv.keys()]);
+
+            for (const varKey of allKeys) {
+              const valIf = ifEnv.get(varKey);
+              const valElse = elseEnv.get(varKey);
+
+              const branchStep: InterproceduralPathStep = {
+                stepNumber: 1,
+                type: 'PROPAGATION',
+                line: stmt.loc?.start?.line || 1,
+                function: scope.name !== 'global' ? scope.name : undefined,
+                functionName: scope.name,
+                symbol: varKey.split('::')[1] || varKey,
+                description: `Branch merge: variable '${varKey.split('::')[1]}' flow merged`,
+              };
+
+              currentEnv.set(varKey, joinAbstractValues(valIf || null, valElse || null, branchStep));
+            }
           }
-          currentEnv.set(varKey, mergedVal);
         }
 
         if (staticCondition === true && ifReturned) {
@@ -1533,9 +1547,13 @@ export function runFlowSensitiveInterproceduralAnalysis(
             const isSanitized = segments[1] === 'sanitized';
             const isUnres = segments[3] === 'unres';
             let trackedStr: string | undefined = undefined;
+            let trackedNum: number | undefined = undefined;
             for (const seg of segments) {
               if (seg.startsWith('str(') && seg.endsWith(')')) {
                 trackedStr = decodeURIComponent(seg.slice(4, -1));
+              } else if (seg.startsWith('num(') && seg.endsWith(')')) {
+                const parsed = Number(seg.slice(4, -1));
+                if (!Number.isNaN(parsed)) trackedNum = parsed;
               }
             }
 
@@ -1545,6 +1563,7 @@ export function runFlowSensitiveInterproceduralAnalysis(
               sanitized: isSanitized,
               isUnresolvedFlow: isUnres,
               stringValue: trackedStr,
+              numberValue: trackedNum,
               history: [{
                 stepNumber: 1,
                 type: 'PARAMETER',

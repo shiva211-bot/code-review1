@@ -44,6 +44,8 @@ export interface InterproceduralReport {
   detectionScorePercent: number;
   status: AnalysisConvergenceStatus;
   converged: boolean;
+  allAnalysesConverged: boolean;
+  suiteExpectationsMet: boolean;
   totalStepsEvaluated: number;
   unresolvedCallsTotal: number;
   durationMs: number;
@@ -54,7 +56,8 @@ export function runInterproceduralVerificationSuite(): InterproceduralReport {
   const startTime = performance.now();
   const results: InterproceduralTestResult[] = [];
   let passedCount = 0;
-  let allConverged = true;
+  let allPhysicallyConverged = true;
+  let suiteExpectationsMet = true;
   let totalStepsEvaluated = 0;
   let unresolvedCallsTotal = 0;
 
@@ -70,8 +73,11 @@ export function runInterproceduralVerificationSuite(): InterproceduralReport {
 
     totalStepsEvaluated += analysisRes.flowSensitiveStepsEvaluated;
     unresolvedCallsTotal += analysisRes.unresolvedCallsCount;
+    if (!analysisRes.converged) {
+      allPhysicallyConverged = false;
+    }
     if (!analysisRes.converged && testCase.expectedConvergenceStatus !== 'resource_limit_exceeded') {
-      allConverged = false;
+      suiteExpectationsMet = false;
     }
 
     const vulns = analysisRes.vulnerabilities;
@@ -241,8 +247,10 @@ export function runInterproceduralVerificationSuite(): InterproceduralReport {
     passedCases: passedCount,
     failedCases: INTERPROCEDURAL_CORPUS.length - passedCount,
     detectionScorePercent,
-    status: allConverged ? 'converged' : 'resource_limit_exceeded',
-    converged: allConverged,
+    status: allPhysicallyConverged ? 'converged' : 'resource_limit_exceeded',
+    converged: suiteExpectationsMet,
+    allAnalysesConverged: allPhysicallyConverged,
+    suiteExpectationsMet,
     totalStepsEvaluated,
     unresolvedCallsTotal,
     durationMs,

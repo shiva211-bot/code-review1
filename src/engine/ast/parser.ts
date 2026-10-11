@@ -66,6 +66,7 @@ export function parseSourceCode(sourceCode: string, filename: string): ParseResu
       sourceType: 'module',
       locations: true,
       ranges: true,
+      allowReturnOutsideFunction: true,
       onToken: (tok) => {
         tokens.push({
           type: tok.type.label,
@@ -89,6 +90,7 @@ export function parseSourceCode(sourceCode: string, filename: string): ParseResu
         sourceType: 'script',
         locations: true,
         ranges: true,
+        allowReturnOutsideFunction: true,
       }) as ASTNode;
       return { ast: parsed, tokens, errors: [] };
     } catch (innerErr: any) {

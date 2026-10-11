@@ -215,7 +215,7 @@ export const QualityDashboard: React.FC = () => {
                 Concept 4 — Flow-Sensitive Interprocedural Data-Flow Engine
               </span>
               <span className="font-mono text-emerald-300 text-[11px]">
-                {interprocReport.passedCases} / {interprocReport.totalCases} Verified ({interprocReport.detectionScorePercent}%) · Status: {interprocReport.status.toUpperCase()}
+                {interprocReport.passedCases} / {interprocReport.totalCases} Verified ({interprocReport.detectionScorePercent}%) · Suite Expectations: {interprocReport.suiteExpectationsMet ? 'MET' : 'FAILED'} · Fixed-Point: {interprocReport.allAnalysesConverged ? 'ALL CONVERGED' : 'INTENTIONAL BOUNDS ENFORCED'}
               </span>
             </div>
             <p className="text-slate-400 text-[11px]">
