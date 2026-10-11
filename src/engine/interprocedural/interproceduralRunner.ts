@@ -76,7 +76,8 @@ export function runInterproceduralVerificationSuite(): InterproceduralReport {
     if (!analysisRes.converged) {
       allPhysicallyConverged = false;
     }
-    if (!analysisRes.converged && testCase.expectedConvergenceStatus !== 'resource_limit_exceeded') {
+    const expectedConv = testCase.expectedConvergenceStatus ?? 'converged';
+    if (analysisRes.status !== expectedConv) {
       suiteExpectationsMet = false;
     }
 
@@ -207,6 +208,8 @@ export function runInterproceduralVerificationSuite(): InterproceduralReport {
     const testPassed = failureReasons.length === 0;
     if (testPassed) {
       passedCount++;
+    } else {
+      suiteExpectationsMet = false;
     }
 
     const verificationMode = primaryVuln ? 'EXACT_TRACE' : 'STATE_AND_ABSENCE';
