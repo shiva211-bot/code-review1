@@ -29,6 +29,9 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({
 }) => {
   // Compute Letter Grade
   const getGrade = (score: number) => {
+    if (metrics.isInconclusive) {
+      return { grade: 'INC', color: 'text-amber-400', desc: 'Incomplete Analysis' };
+    }
     if (score >= 90) return { grade: 'A+', color: 'text-emerald-400', desc: 'Production Ready' };
     if (score >= 80) return { grade: 'A', color: 'text-emerald-300', desc: 'Secure & Efficient' };
     if (score >= 70) return { grade: 'B', color: 'text-cyan-400', desc: 'Acceptable' };
@@ -48,6 +51,22 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Explicit Incomplete Analysis Warning Banner */}
+      {metrics.isInconclusive && (
+        <div className="p-3.5 rounded-lg bg-amber-950/40 border border-amber-800/80 text-amber-200 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-xs space-y-1">
+            <div className="font-bold flex items-center gap-2">
+              <span>INCOMPLETE_ANALYSIS WARNING</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/60 border border-amber-700/60 font-mono">CONSERVATIVE BOUND</span>
+            </div>
+            <p className="text-slate-300 leading-relaxed">
+              Interprocedural analysis reached its iteration resource budget before fixed-point convergence. In accordance with conservative verification soundness, missing findings along unanalyzed recursive or deep call paths cannot be treated as evidence of safety.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Top Banner: Health Score + High-level Summary */}
       <div className="p-4 rounded-lg bg-slate-900/80 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-5">
         <div className="flex items-center gap-5 w-full sm:w-auto">
@@ -66,7 +85,7 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({
                 cx="48"
                 cy="48"
                 r={radius}
-                className="stroke-emerald-500 transition-all duration-1000 ease-out"
+                className={`transition-all duration-1000 ease-out ${metrics.isInconclusive ? 'stroke-amber-500' : 'stroke-emerald-500'}`}
                 strokeWidth="7"
                 strokeDasharray={circumference}
                 strokeDashoffset={strokeDashoffset}
@@ -95,7 +114,9 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1 max-w-sm leading-relaxed">
-              {criticalCount > 0
+              {metrics.isInconclusive
+                ? 'Analysis incomplete: iteration resource budget reached. Incomplete analysis cannot prove safety; missing findings must not be treated as clean.'
+                : criticalCount > 0
                 ? `${criticalCount} critical and ${highCount} high risk flaws detected in current execution path.`
                 : findings.length > 0
                 ? `${findings.length} optimization opportunities identified to reduce latency and memory churn.`
@@ -136,7 +157,7 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({
         <div className="p-3.5 rounded-lg bg-slate-900/60 border border-slate-800/80 hover:border-slate-700 transition-colors">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-slate-400">Security Index</span>
-            <ShieldAlert className="w-4 h-4 text-emerald-400" />
+            <ShieldAlert className={`w-4 h-4 ${metrics.isInconclusive ? 'text-amber-400' : 'text-emerald-400'}`} />
           </div>
           <div className="mt-2 flex items-baseline gap-1.5">
             <span className="text-2xl font-bold font-mono text-slate-100">
@@ -145,11 +166,11 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({
             <span className="text-xs text-slate-500 font-mono">/100</span>
           </div>
           <div className="mt-2 text-[11px] text-slate-400 flex items-center gap-1.5">
-            <span className={metrics.securityScore >= 80 ? 'text-emerald-400' : 'text-rose-400'}>
-              {metrics.securityScore >= 80 ? 'Protected' : `${criticalCount} High Vulnerabilities`}
+            <span className={metrics.isInconclusive ? 'text-amber-400 font-bold' : metrics.securityScore >= 80 ? 'text-emerald-400' : 'text-rose-400'}>
+              {metrics.isInconclusive ? 'Incomplete — Safety Unverified' : metrics.securityScore >= 80 ? 'Protected' : `${criticalCount} High Vulnerabilities`}
             </span>
             <span className="text-slate-600">·</span>
-            <span>OWASP Top 10</span>
+            <span>{metrics.isInconclusive ? 'Resource Limit' : 'OWASP Top 10'}</span>
           </div>
         </div>
 
@@ -160,6 +181,7 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({
             <Gauge className={`w-4 h-4 ${
               metrics.staticRiskEstimate === 'CRITICAL' ? 'text-rose-400' :
               metrics.staticRiskEstimate === 'HIGH' ? 'text-amber-400' :
+              metrics.staticRiskEstimate === 'INCONCLUSIVE' ? 'text-amber-400' :
               metrics.staticRiskEstimate === 'MODERATE' ? 'text-yellow-400' : 'text-emerald-400'
             }`} />
           </div>
@@ -167,15 +189,18 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({
             <span className={`text-2xl font-bold font-mono ${
               metrics.staticRiskEstimate === 'CRITICAL' ? 'text-rose-400' :
               metrics.staticRiskEstimate === 'HIGH' ? 'text-amber-400' :
+              metrics.staticRiskEstimate === 'INCONCLUSIVE' ? 'text-amber-400' :
               metrics.staticRiskEstimate === 'MODERATE' ? 'text-yellow-400' : 'text-emerald-400'
             }`}>
               {metrics.staticRiskEstimate}
             </span>
           </div>
           <div className="mt-2 text-[11px] text-slate-400 flex items-center gap-1.5">
-            <span className="text-slate-300 font-mono">AST Heuristic</span>
+            <span className="text-slate-300 font-mono">
+              {metrics.staticRiskEstimate === 'INCONCLUSIVE' ? 'Resource Budget Limit' : 'AST Heuristic'}
+            </span>
             <span className="text-slate-600">·</span>
-            <span>Static Risk Estimate</span>
+            <span>{metrics.staticRiskEstimate === 'INCONCLUSIVE' ? 'Safety Unproven' : 'Static Risk Estimate'}</span>
           </div>
         </div>
 

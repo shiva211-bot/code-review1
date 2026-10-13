@@ -10,7 +10,8 @@ import { AnalysisResult, CodeFinding, CodeMetrics, StaticRiskLevel } from '../ty
 export function executeTrueStaticAnalysis(
   code: string,
   language: string,
-  filename: string
+  filename: string,
+  options?: { maxIterations?: number }
 ): { analysis: AnalysisResult; engineData: ComprehensiveStaticAnalysis } {
   const startTime = performance.now();
 
@@ -24,7 +25,7 @@ export function executeTrueStaticAnalysis(
 
   // 3. Local & Interprocedural Taint Data Flow Analysis (Source to Sink)
   const taintVulns = performTaintAnalysis(ast, code);
-  const interprocAnalysis = runFlowSensitiveInterproceduralAnalysis(ast, filename);
+  const interprocAnalysis = runFlowSensitiveInterproceduralAnalysis(ast, filename, options);
   const interprocVulns = interprocAnalysis.vulnerabilities;
   const isInconclusive = !interprocAnalysis.converged || interprocAnalysis.status === 'resource_limit_exceeded';
 
@@ -157,9 +158,23 @@ export function executeTrueStaticAnalysis(
   }
 
   // Static Risk Level (Conservative Soundness: Incomplete analysis must NEVER yield LOW risk)
-  let staticRiskEstimate: StaticRiskLevel = criticalCount > 0 ? 'CRITICAL' : highCount > 0 ? 'HIGH' : mediumCount > 0 ? 'MODERATE' : 'LOW';
-  if (isInconclusive && staticRiskEstimate === 'LOW') {
+  const genuineCriticalCount = findings.filter(f => f.severity === 'critical' && !f.id.startsWith('analysis-status')).length;
+  const genuineHighCount = findings.filter(f => f.severity === 'high' && !f.id.startsWith('analysis-status')).length;
+  const genuineMediumCount = findings.filter(f => f.severity === 'medium' && !f.id.startsWith('analysis-status')).length;
+
+  let staticRiskEstimate: StaticRiskLevel;
+  if (genuineCriticalCount > 0) {
+    staticRiskEstimate = 'CRITICAL';
+  } else if (genuineHighCount > 0) {
+    staticRiskEstimate = 'HIGH';
+  } else if (isInconclusive) {
+    // Under incomplete analysis without confirmed critical/high vulnerabilities,
+    // conservative semantics dictate that absence of evidence is not evidence of absence:
     staticRiskEstimate = 'INCONCLUSIVE';
+  } else if (genuineMediumCount > 0) {
+    staticRiskEstimate = 'MODERATE';
+  } else {
+    staticRiskEstimate = 'LOW';
   }
   const rulesPassedPercent = Math.round((ruleResults.filter(r => r.passed).length / Math.max(1, ruleResults.length)) * 100);
 

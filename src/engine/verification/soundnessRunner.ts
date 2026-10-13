@@ -18,7 +18,12 @@ export interface SoundnessVerificationReport {
   totalChecks: number;
   passedChecks: number;
   failedChecks: number;
+  soundnessChecksPassed: boolean;
+  /**
+   * @deprecated Legacy alias for soundnessChecksPassed.
+   */
   soundnessGuaranteed: boolean;
+  qualificationNote: string;
   durationMs: number;
   checks: SoundnessCheckResult[];
 }
@@ -243,6 +248,60 @@ export function runSoundnessVerificationSuite(): SoundnessVerificationReport {
     });
   }
 
+  // -------------------------------------------------------------------------
+  // Check 8: End-to-End Incomplete Result Propagation Across All Consumers
+  // -------------------------------------------------------------------------
+  {
+    const recursiveCode = `
+      function deepChain(n, val) {
+        if (n <= 0) return val;
+        return deepChain(n - 1, val);
+      }
+      const data = req.query.id;
+      const res = deepChain(10, data);
+    `;
+    // Explicitly restrict iteration budget to 1 to force resource exhaustion
+    const { analysis, engineData } = executeTrueStaticAnalysis(
+      recursiveCode,
+      'javascript',
+      'end_to_end_incomplete.js',
+      { maxIterations: 1 }
+    );
+
+    const hasIncompleteFinding = analysis.findings.some(f => 
+      f.id.startsWith('analysis-status') || f.title.includes('INCOMPLETE_ANALYSIS')
+    );
+    const riskNotLow = analysis.metrics.staticRiskEstimate === 'INCONCLUSIVE';
+    const securityCapped = analysis.metrics.securityScore <= 75;
+    const warningPresent = Boolean(analysis.incompleteAnalysisWarning);
+    const engineDataInconclusive = Boolean(engineData.isInconclusive && engineData.interproceduralAnalysis?.isInconclusive);
+
+    const passed = analysis.isInconclusive === true &&
+      analysis.analysisStatus === 'resource_limit_exceeded' &&
+      hasIncompleteFinding &&
+      riskNotLow &&
+      securityCapped &&
+      warningPresent &&
+      engineDataInconclusive;
+
+    checks.push({
+      checkId: 'SND-08-END-TO-END-INCOMPLETE-PROPAGATION',
+      name: 'End-to-End Incomplete Analysis Propagation Across File Consumers',
+      principle: 'CONSERVATIVE_APPROXIMATION',
+      passed,
+      expectedBehavior: 'Resource exhaustion must propagate: isInconclusive=true, status=resource_limit_exceeded, staticRisk=INCONCLUSIVE, score<=75, warning finding present',
+      observedBehavior: `isInconclusive=${analysis.isInconclusive}, status='${analysis.analysisStatus}', risk='${analysis.metrics.staticRiskEstimate}', score=${analysis.metrics.securityScore}, hasFinding=${hasIncompleteFinding}, engineInconclusive=${engineDataInconclusive}`,
+      evidence: {
+        isInconclusive: analysis.isInconclusive,
+        analysisStatus: analysis.analysisStatus,
+        staticRiskEstimate: analysis.metrics.staticRiskEstimate,
+        securityScore: analysis.metrics.securityScore,
+        hasIncompleteFinding,
+        engineDataInconclusive,
+      },
+    });
+  }
+
   const durationMs = Number((performance.now() - startTime).toFixed(2));
   const passedChecks = checks.filter(c => c.passed).length;
   const failedChecks = checks.length - passedChecks;
@@ -252,7 +311,9 @@ export function runSoundnessVerificationSuite(): SoundnessVerificationReport {
     totalChecks: checks.length,
     passedChecks,
     failedChecks,
+    soundnessChecksPassed: failedChecks === 0,
     soundnessGuaranteed: failedChecks === 0,
+    qualificationNote: 'Executable tests of selected abstract interpretation soundness properties (conservative bounds, monotonicity, constant joins, branch isolation). These tests validate expected invariants on known test cases and do not constitute a formal mathematical proof for arbitrary JavaScript programs.',
     durationMs,
     checks,
   };

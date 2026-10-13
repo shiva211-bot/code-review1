@@ -80,6 +80,21 @@ export const FindingsList: React.FC<FindingsListProps> = ({
 
   return (
     <div className="space-y-3">
+      {/* Explicit Incomplete Analysis Notification */}
+      {findings.some(f => f.title.includes('INCOMPLETE_ANALYSIS')) && (
+        <div className="p-3 rounded-lg bg-amber-950/40 border border-amber-800/80 text-amber-200 flex items-start gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-xs space-y-0.5">
+            <div className="font-bold text-amber-300 flex items-center gap-2">
+              <span>CONSERVATIVE ANALYSIS WARNING: INCOMPLETE_ANALYSIS</span>
+            </div>
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              Iteration resource limit was reached during interprocedural analysis. Incomplete analysis cannot prove safety; unanalyzed execution branches may contain unverified flows. Absence of findings must not be treated as clean code.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Controls: Filter Segmented Buttons & Search */}
       <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center justify-between">
         {/* Interactive Filter Buttons */}

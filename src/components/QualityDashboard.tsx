@@ -464,18 +464,21 @@ export const QualityDashboard: React.FC = () => {
       {/* VIEW: SOUNDNESS & CONSERVATIVE BOUNDS */}
       {viewMode === 'soundness' && (
         <div className="space-y-3">
-          <div className="p-3.5 rounded-lg bg-teal-950/20 border border-teal-800/40 text-xs text-slate-300 space-y-1">
+          <div className="p-3.5 rounded-lg bg-teal-950/20 border border-teal-800/40 text-xs text-slate-300 space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-teal-400 font-mono">
-                Formal Abstract Interpretation Soundness &amp; Conservative Results Suite
+                Soundness Verification &amp; Conservative Results Invariant Suite
               </span>
               <span className="font-mono text-teal-300 text-[11px]">
-                {soundnessReport.passedChecks} / {soundnessReport.totalChecks} Checks Verified · Soundness Status: {soundnessReport.soundnessGuaranteed ? 'SOUNDNESS GUARANTEED' : 'VIOLATION DETECTED'}
+                {soundnessReport.passedChecks} / {soundnessReport.totalChecks} Checks Passed · Status: {soundnessReport.soundnessChecksPassed ? 'SOUNDNESS CHECKS PASSED' : 'CHECK FAILED'}
               </span>
             </div>
-            <p className="text-slate-400 text-[11px]">
-              Empirically verifies core static-analysis soundness theorems: bounded analysis hitting iteration limits never reports safety (rejection of unverified safety on incomplete traces), file-level risk estimate cannot be 'LOW' when analysis is incomplete, lattice join monotonicity holds, and distinct constants ⊔ yields TOP.
+            <p className="text-slate-400 text-[11px] leading-relaxed">
+              Empirically verifies core static-analysis soundness invariants: bounded analysis hitting iteration limits never reports safety (rejection of unverified safety on incomplete traces), file-level risk estimate cannot be 'LOW' when analysis is incomplete, lattice join monotonicity holds, and distinct constants ⊔ yields TOP.
             </p>
+            <div className="p-2 rounded bg-teal-950/40 border border-teal-900/60 text-[10px] text-teal-300/90 font-mono">
+              <strong>Formal Qualification Notice: </strong>{soundnessReport.qualificationNote}
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -510,7 +513,7 @@ export const QualityDashboard: React.FC = () => {
 
                     <div className="flex items-center gap-2 font-mono text-[11px]">
                       <span className="px-2 py-0.5 rounded border text-emerald-400 border-emerald-800/60 bg-emerald-950/40">
-                        VERIFIED SOUND
+                        INVARIANT VERIFIED
                       </span>
                       {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
                     </div>
@@ -538,7 +541,7 @@ export const QualityDashboard: React.FC = () => {
       {/* VIEW: INDEPENDENT EXTERNAL BENCHMARKS */}
       {viewMode === 'external' && (
         <div className="space-y-3">
-          <div className="p-3.5 rounded-lg bg-indigo-950/20 border border-indigo-800/40 text-xs text-slate-300 space-y-1">
+          <div className="p-3.5 rounded-lg bg-indigo-950/20 border border-indigo-800/40 text-xs text-slate-300 space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-indigo-400 font-mono">
                 Independent External Benchmarks (OWASP Benchmark, Securibench-JS, NodeGoat)
@@ -547,12 +550,78 @@ export const QualityDashboard: React.FC = () => {
                 Precision: {externalReport.precisionPercent}% · Recall: {externalReport.recallPercent}% · F1: {externalReport.f1Score} · Accuracy: {externalReport.accuracyPercent}%
               </span>
             </div>
-            <p className="text-slate-400 text-[11px]">
-              Independent benchmark suite adapted from external vulnerability datasets across CWE-89 (SQLi), CWE-95 (Code Injection), CWE-78 (Command Injection), CWE-22 (Path Traversal), and CWE-79 (XSS). Demonstrates high precision and zero false negatives on independently structured programs.
+            <p className="text-slate-400 text-[11px] leading-relaxed">
+              Standardized benchmark cases evaluated against ground truth labels across CWE-89 (SQLi), CWE-95 (Code Injection), CWE-78 (Command Injection), CWE-22 (Path Traversal), and CWE-79 (XSS). Separated into genuine upstream official benchmark samples and locally authored regression test cases.
             </p>
+            <div className="p-2 rounded bg-indigo-950/40 border border-indigo-900/60 text-[10px] text-indigo-300/90 font-mono">
+              <strong>Benchmark Qualification Notice: </strong>{externalReport.qualificationNote}
+            </div>
           </div>
 
-          {/* Confusion Matrix Summary */}
+          {/* Upstream vs Locally Authored Breakdown Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
+            <div className="p-3 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sky-400">Upstream Official Samples ({externalReport.upstreamOfficialMetrics.total} Cases)</span>
+                <span className="text-emerald-400 text-[11px]">
+                  {externalReport.upstreamOfficialMetrics.truePositives + externalReport.upstreamOfficialMetrics.trueNegatives} / {externalReport.upstreamOfficialMetrics.total} Passed
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                Faithful adaptations of official OWASP Benchmark (v1.2), Securibench-JS (v0.1), and OWASP NodeGoat test cases with upstream commit &amp; test IDs.
+              </p>
+              <div className="grid grid-cols-4 gap-1.5 pt-1 text-center text-[10px]">
+                <div className="bg-slate-950 p-1.5 rounded border border-slate-800">
+                  <span className="text-slate-500 block">TP</span>
+                  <span className="text-emerald-400 font-bold">{externalReport.upstreamOfficialMetrics.truePositives}</span>
+                </div>
+                <div className="bg-slate-950 p-1.5 rounded border border-slate-800">
+                  <span className="text-slate-500 block">TN</span>
+                  <span className="text-cyan-400 font-bold">{externalReport.upstreamOfficialMetrics.trueNegatives}</span>
+                </div>
+                <div className="bg-slate-950 p-1.5 rounded border border-slate-800">
+                  <span className="text-slate-500 block">Prec</span>
+                  <span className="text-emerald-400 font-bold">{externalReport.upstreamOfficialMetrics.precisionPercent}%</span>
+                </div>
+                <div className="bg-slate-950 p-1.5 rounded border border-slate-800">
+                  <span className="text-slate-500 block">Rec</span>
+                  <span className="text-emerald-400 font-bold">{externalReport.upstreamOfficialMetrics.recallPercent}%</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-violet-400">Locally Authored Regressions ({externalReport.locallyAuthoredMetrics.total} Cases)</span>
+                <span className="text-emerald-400 text-[11px]">
+                  {externalReport.locallyAuthoredMetrics.truePositives + externalReport.locallyAuthoredMetrics.trueNegatives} / {externalReport.locallyAuthoredMetrics.total} Passed
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                Locally developed edge-case regressions exercising dynamic properties, multi-level closures, and prototype property access chains.
+              </p>
+              <div className="grid grid-cols-4 gap-1.5 pt-1 text-center text-[10px]">
+                <div className="bg-slate-950 p-1.5 rounded border border-slate-800">
+                  <span className="text-slate-500 block">TP</span>
+                  <span className="text-emerald-400 font-bold">{externalReport.locallyAuthoredMetrics.truePositives}</span>
+                </div>
+                <div className="bg-slate-950 p-1.5 rounded border border-slate-800">
+                  <span className="text-slate-500 block">TN</span>
+                  <span className="text-cyan-400 font-bold">{externalReport.locallyAuthoredMetrics.trueNegatives}</span>
+                </div>
+                <div className="bg-slate-950 p-1.5 rounded border border-slate-800">
+                  <span className="text-slate-500 block">Prec</span>
+                  <span className="text-emerald-400 font-bold">{externalReport.locallyAuthoredMetrics.precisionPercent}%</span>
+                </div>
+                <div className="bg-slate-950 p-1.5 rounded border border-slate-800">
+                  <span className="text-slate-500 block">Rec</span>
+                  <span className="text-emerald-400 font-bold">{externalReport.locallyAuthoredMetrics.recallPercent}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Combined Confusion Matrix Summary */}
           <div className="grid grid-cols-4 gap-2 font-mono text-xs text-center">
             <div className="p-2.5 rounded bg-slate-900/60 border border-slate-800">
               <span className="text-slate-500 text-[10px] block">True Positives (TP)</span>
@@ -575,6 +644,8 @@ export const QualityDashboard: React.FC = () => {
           <div className="space-y-2">
             {externalReport.results.map((res) => {
               const isExpanded = expandedExternalId === res.benchmarkId;
+              const isUpstream = res.category === 'upstream_official_sample';
+
               return (
                 <div
                   key={res.benchmarkId}
@@ -593,6 +664,14 @@ export const QualityDashboard: React.FC = () => {
                           <span className="text-slate-300 font-sans font-medium">{res.name}</span>
                         </div>
                         <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5 font-mono">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                            isUpstream 
+                              ? 'bg-sky-950 text-sky-300 border border-sky-800/60' 
+                              : 'bg-violet-950 text-violet-300 border border-violet-800/60'
+                          }`}>
+                            {isUpstream ? 'Upstream Official' : 'Locally Authored'}
+                          </span>
+                          <span className="text-slate-600">·</span>
                           <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px]">
                             {res.source}
                           </span>
@@ -617,11 +696,39 @@ export const QualityDashboard: React.FC = () => {
                   </div>
 
                   {isExpanded && (
-                    <div className="p-3 border-t border-slate-800/70 space-y-2 bg-slate-950 font-mono text-[11px]">
-                      <div className="flex items-center justify-between text-slate-300">
+                    <div className="p-3 border-t border-slate-800/70 space-y-2.5 bg-slate-950 font-mono text-[11px]">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-slate-300">
                         <span>Actual Classification: <strong className="text-emerald-400">{res.actualVulnerable ? 'VULNERABLE' : 'SAFE'}</strong></span>
+                        <span>Ground Truth Label: <strong className="text-sky-300">{res.groundTruthLabel.toUpperCase()}</strong></span>
                         <span>Findings Count: <strong>{res.findingsCount}</strong></span>
                         <span>Scan Latency: <strong>{res.durationMs}ms</strong></span>
+                      </div>
+
+                      {/* Upstream Provenance Details */}
+                      <div className="p-2.5 rounded bg-slate-900 border border-slate-800 text-[10px] space-y-1">
+                        <div className="text-slate-400 font-bold mb-1">Upstream Benchmark Provenance &amp; Adaptation:</div>
+                        {res.upstreamRepo && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500">Upstream Repository:</span>
+                            <span className="text-slate-300">{res.upstreamRepo}</span>
+                          </div>
+                        )}
+                        {res.upstreamVersionOrCommit && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500">Version / Commit:</span>
+                            <span className="text-slate-300">{res.upstreamVersionOrCommit}</span>
+                          </div>
+                        )}
+                        {res.originalTestId && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500">Original Test ID:</span>
+                            <span className="text-indigo-400">{res.originalTestId}</span>
+                          </div>
+                        )}
+                        <div className="pt-0.5">
+                          <span className="text-slate-500 block">Adaptation Notes:</span>
+                          <span className="text-slate-400">{res.adaptationNotes}</span>
+                        </div>
                       </div>
                     </div>
                   )}

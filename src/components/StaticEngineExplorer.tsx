@@ -71,6 +71,24 @@ export const StaticEngineExplorer: React.FC<StaticEngineExplorerProps> = ({
         </div>
       </div>
 
+      {/* Explicit Incomplete Analysis Engine Banner */}
+      {engineData.isInconclusive && (
+        <div className="p-3 rounded-lg bg-amber-950/40 border border-amber-800/80 text-amber-200 flex items-start gap-2.5">
+          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div className="text-xs space-y-0.5 font-mono">
+            <div className="font-bold text-amber-300 flex items-center gap-2">
+              <span>INTERPROCEDURAL ANALYSIS STATUS: INCOMPLETE_ANALYSIS</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/60 border border-amber-700/60">
+                {engineData.interproceduralAnalysis?.iterations} ITERATIONS (RESOURCE CAP EXCEEDED)
+              </span>
+            </div>
+            <p className="text-slate-300 text-[11px] font-sans leading-relaxed">
+              Fixed-point iteration budget was exceeded before convergence. In accordance with conservative abstract interpretation principles, absence of detected flows cannot establish safety.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Sub-navigation Controls (Zero-Pill Interactive Buttons) */}
       <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-md border border-slate-800 text-xs">
         <button
