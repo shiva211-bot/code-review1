@@ -110,7 +110,7 @@ export const QualityDashboard: React.FC = () => {
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
-            Empirical validation proving AST parsing, CFG reachability, Interprocedural Taint across function boundaries, formal soundness theorems, and external benchmark suites (OWASP Benchmark, Securibench-JS, NodeGoat).
+            Empirical validation proving AST parsing, CFG reachability, Interprocedural Taint across function boundaries, abstract interpretation soundness invariants, and external benchmark suites (OWASP Benchmark [Java-adapted], Securibench-JS, NodeGoat).
           </p>
         </div>
 
@@ -144,9 +144,9 @@ export const QualityDashboard: React.FC = () => {
           <div className="text-[10px] text-slate-400">100% Path Traces Verified</div>
         </div>
 
-        {/* Soundness Guarantees */}
+        {/* Soundness Invariants */}
         <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800">
-          <div className="text-slate-500 text-[10px]">Soundness Theorems</div>
+          <div className="text-slate-500 text-[10px]">Soundness Invariants</div>
           <div className="text-lg font-bold text-teal-400 mt-0.5">
             {soundnessReport.passedChecks} / {soundnessReport.totalChecks}
           </div>
@@ -213,7 +213,7 @@ export const QualityDashboard: React.FC = () => {
           }`}
         >
           <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
-          <span>Soundness &amp; Safety Guarantees ({soundnessReport.totalChecks} Checks)</span>
+          <span>Soundness Invariants ({soundnessReport.totalChecks} Checks)</span>
         </button>
 
         <button

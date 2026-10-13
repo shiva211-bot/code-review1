@@ -90,17 +90,18 @@ export function runSoundnessVerificationSuite(): SoundnessVerificationReport {
       const input = req.query.q;
       const out = mutualA(5, input);
     `;
-    const { analysis, engineData } = executeTrueStaticAnalysis(boundedCode, 'javascript', 'bounded_file.js');
+    // Explicitly restrict iteration budget to 1 to force resource exhaustion
+    const { analysis } = executeTrueStaticAnalysis(boundedCode, 'javascript', 'bounded_file.js', { maxIterations: 1 });
     
-    // In our engine, if mutual recursion runs with default options or exceeds iterations,
-    // the file-level analysis must either be converged OR if resource_limit_exceeded, staticRiskEstimate != 'LOW'
-    const isConservative = !analysis.isInconclusive || analysis.metrics.staticRiskEstimate !== 'LOW';
+    // In our engine, when analysis is incomplete due to resource exhaustion,
+    // the file-level risk estimate must NEVER evaluate to 'LOW' -> must be 'INCONCLUSIVE'
+    const passed = analysis.isInconclusive === true && analysis.metrics.staticRiskEstimate === 'INCONCLUSIVE';
     checks.push({
       checkId: 'SND-02-CONSERVATIVE-RISK-BOUND',
       name: 'Absence of Findings Under Incomplete Analysis Never Yields LOW Risk',
       principle: 'CONSERVATIVE_APPROXIMATION',
-      passed: isConservative,
-      expectedBehavior: "If analysis is incomplete, staticRiskEstimate must NOT be 'LOW' (must be 'INCONCLUSIVE' or higher)",
+      passed,
+      expectedBehavior: "If analysis is incomplete, staticRiskEstimate must evaluate to 'INCONCLUSIVE' (never 'LOW')",
       observedBehavior: `isInconclusive: ${analysis.isInconclusive}, staticRiskEstimate: ${analysis.metrics.staticRiskEstimate}`,
       evidence: {
         isInconclusive: analysis.isInconclusive,
@@ -121,28 +122,28 @@ export function runSoundnessVerificationSuite(): SoundnessVerificationReport {
       function d(x) { return a(x); }
       const res = a(req.query.v);
     `;
-    const { analysis } = executeTrueStaticAnalysis(deepMutualCode, 'javascript', 'deep_cycle.js');
+    // Explicitly restrict iteration budget to 1 to force resource exhaustion
+    const { analysis } = executeTrueStaticAnalysis(deepMutualCode, 'javascript', 'deep_cycle.js', { maxIterations: 1 });
     
-    // If incomplete, an explicit finding with INCOMPLETE_ANALYSIS must exist
-    let passed = true;
-    if (analysis.isInconclusive) {
-      const hasIncompleteFinding = analysis.findings.some(f => 
-        f.title.includes('INCOMPLETE_ANALYSIS') || f.id.includes('analysis-status')
-      );
-      passed = hasIncompleteFinding && Boolean(analysis.incompleteAnalysisWarning);
-    }
+    // Explicit finding with INCOMPLETE_ANALYSIS and incompleteAnalysisWarning must exist
+    const hasIncompleteFinding = analysis.findings.some(f => 
+      f.title.includes('INCOMPLETE_ANALYSIS') || f.id.includes('analysis-status')
+    );
+    const passed = analysis.isInconclusive === true && 
+      hasIncompleteFinding && 
+      Boolean(analysis.incompleteAnalysisWarning);
+
     checks.push({
       checkId: 'SND-03-INCOMPLETE-FINDING-PROPAGATION',
       name: 'Explicit INCOMPLETE_ANALYSIS Finding Injected on Resource Limit',
       principle: 'CONSERVATIVE_APPROXIMATION',
       passed,
       expectedBehavior: 'When analysis is inconclusive, explicit INCOMPLETE_ANALYSIS finding must exist in findings list',
-      observedBehavior: analysis.isInconclusive 
-        ? `Inconclusive flagged. Warning: '${analysis.incompleteAnalysisWarning?.slice(0, 50)}...'`
-        : 'Analysis converged completely within iteration budget.',
+      observedBehavior: `isInconclusive: ${analysis.isInconclusive}, hasIncompleteFinding: ${hasIncompleteFinding}, warning: '${analysis.incompleteAnalysisWarning?.slice(0, 50)}...'`,
       evidence: {
         isInconclusive: analysis.isInconclusive,
         findingsCount: analysis.findings.length,
+        hasIncompleteFinding,
         hasWarning: Boolean(analysis.incompleteAnalysisWarning),
       },
     });
