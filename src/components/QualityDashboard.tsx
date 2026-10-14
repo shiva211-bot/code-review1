@@ -542,13 +542,18 @@ export const QualityDashboard: React.FC = () => {
       {viewMode === 'external' && (
         <div className="space-y-3">
           <div className="p-3.5 rounded-lg bg-indigo-950/20 border border-indigo-800/40 text-xs text-slate-300 space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <span className="font-semibold text-indigo-400 font-mono">
                 Independent External Benchmarks (OWASP Benchmark, Securibench-JS, NodeGoat)
               </span>
-              <span className="font-mono text-indigo-300 text-[11px]">
-                Precision: {externalReport.precisionPercent}% · Recall: {externalReport.recallPercent}% · F1: {externalReport.f1Score} · Accuracy: {externalReport.accuracyPercent}%
-              </span>
+              <div className="flex items-center gap-2 font-mono text-[11px]">
+                <span className="text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-1.5 py-0.5 rounded text-[10px]">
+                  Integrity: {externalReport.integrityVerifiedCount}/{externalReport.totalBenchmarks} Pinned Matches
+                </span>
+                <span className="text-indigo-300">
+                  Precision: {externalReport.precisionPercent}% · Recall: {externalReport.recallPercent}% · F1: {externalReport.f1Score} · Accuracy: {externalReport.accuracyPercent}%
+                </span>
+              </div>
             </div>
             <p className="text-slate-400 text-[11px] leading-relaxed">
               Standardized benchmark cases evaluated against ground truth labels across CWE-89 (SQLi), CWE-95 (Code Injection), CWE-78 (Command Injection), CWE-22 (Path Traversal), and CWE-79 (XSS). Separated into genuine upstream official benchmark samples and locally authored regression test cases.
@@ -732,11 +737,16 @@ export const QualityDashboard: React.FC = () => {
                           </div>
                         )}
                         {(res.snippetSha256 || res.referenceHash) && (
-                          <div className="flex items-start sm:items-center gap-2 flex-col sm:flex-row">
+                          <div className="flex items-start sm:items-center gap-2 flex-col sm:flex-row flex-wrap">
                             <span className="text-slate-500 whitespace-nowrap">Evaluated Snippet SHA-256:</span>
                             <span className="text-emerald-400 font-mono text-[9px] bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 break-all select-all font-semibold">
                               {res.snippetSha256 || res.referenceHash}
                             </span>
+                            {res.integrityVerified && (
+                              <span className="text-emerald-400 text-[9px] bg-emerald-950/70 border border-emerald-800/80 px-1.5 py-0.5 rounded font-mono font-medium">
+                                ✓ Pinned Reference Match
+                              </span>
+                            )}
                           </div>
                         )}
                         <div className="pt-0.5">
