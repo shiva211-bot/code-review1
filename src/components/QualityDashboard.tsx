@@ -731,10 +731,12 @@ export const QualityDashboard: React.FC = () => {
                             <span className="text-indigo-400 font-bold">{res.originalTestId}</span>
                           </div>
                         )}
-                        {res.referenceHash && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-500">Content Reference Hash:</span>
-                            <span className="text-emerald-400 font-mono text-[9px] bg-slate-950 px-1 py-0.5 rounded border border-slate-800">{res.referenceHash}</span>
+                        {(res.snippetSha256 || res.referenceHash) && (
+                          <div className="flex items-start sm:items-center gap-2 flex-col sm:flex-row">
+                            <span className="text-slate-500 whitespace-nowrap">Evaluated Snippet SHA-256:</span>
+                            <span className="text-emerald-400 font-mono text-[9px] bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 break-all select-all font-semibold">
+                              {res.snippetSha256 || res.referenceHash}
+                            </span>
                           </div>
                         )}
                         <div className="pt-0.5">
