@@ -95,14 +95,16 @@ export function runSoundnessVerificationSuite(): SoundnessVerificationReport {
     
     // In our engine, when analysis is incomplete due to resource exhaustion,
     // the file-level risk estimate must NEVER evaluate to 'LOW' -> must be 'INCONCLUSIVE'
-    const passed = analysis.isInconclusive === true && analysis.metrics.staticRiskEstimate === 'INCONCLUSIVE';
+    const passed = analysis.isInconclusive === true &&
+      analysis.analysisStatus === 'resource_limit_exceeded' &&
+      analysis.metrics.staticRiskEstimate === 'INCONCLUSIVE';
     checks.push({
       checkId: 'SND-02-CONSERVATIVE-RISK-BOUND',
       name: 'Absence of Findings Under Incomplete Analysis Never Yields LOW Risk',
       principle: 'CONSERVATIVE_APPROXIMATION',
       passed,
-      expectedBehavior: "If analysis is incomplete, staticRiskEstimate must evaluate to 'INCONCLUSIVE' (never 'LOW')",
-      observedBehavior: `isInconclusive: ${analysis.isInconclusive}, staticRiskEstimate: ${analysis.metrics.staticRiskEstimate}`,
+      expectedBehavior: "If analysis is incomplete, staticRiskEstimate must evaluate to 'INCONCLUSIVE' (never 'LOW') and analysisStatus === 'resource_limit_exceeded'",
+      observedBehavior: `isInconclusive: ${analysis.isInconclusive}, status: '${analysis.analysisStatus}', staticRiskEstimate: ${analysis.metrics.staticRiskEstimate}`,
       evidence: {
         isInconclusive: analysis.isInconclusive,
         staticRiskEstimate: analysis.metrics.staticRiskEstimate,
@@ -130,6 +132,7 @@ export function runSoundnessVerificationSuite(): SoundnessVerificationReport {
       f.title.includes('INCOMPLETE_ANALYSIS') || f.id.includes('analysis-status')
     );
     const passed = analysis.isInconclusive === true && 
+      analysis.analysisStatus === 'resource_limit_exceeded' &&
       hasIncompleteFinding && 
       Boolean(analysis.incompleteAnalysisWarning);
 
@@ -138,10 +141,11 @@ export function runSoundnessVerificationSuite(): SoundnessVerificationReport {
       name: 'Explicit INCOMPLETE_ANALYSIS Finding Injected on Resource Limit',
       principle: 'CONSERVATIVE_APPROXIMATION',
       passed,
-      expectedBehavior: 'When analysis is inconclusive, explicit INCOMPLETE_ANALYSIS finding must exist in findings list',
-      observedBehavior: `isInconclusive: ${analysis.isInconclusive}, hasIncompleteFinding: ${hasIncompleteFinding}, warning: '${analysis.incompleteAnalysisWarning?.slice(0, 50)}...'`,
+      expectedBehavior: 'When analysis is inconclusive, explicit INCOMPLETE_ANALYSIS finding must exist in findings list and analysisStatus === resource_limit_exceeded',
+      observedBehavior: `isInconclusive: ${analysis.isInconclusive}, status: '${analysis.analysisStatus}', hasIncompleteFinding: ${hasIncompleteFinding}, warning: '${analysis.incompleteAnalysisWarning?.slice(0, 50)}...'`,
       evidence: {
         isInconclusive: analysis.isInconclusive,
+        analysisStatus: analysis.analysisStatus,
         findingsCount: analysis.findings.length,
         hasIncompleteFinding,
         hasWarning: Boolean(analysis.incompleteAnalysisWarning),
@@ -191,11 +195,12 @@ export function runSoundnessVerificationSuite(): SoundnessVerificationReport {
   }
 
   // -------------------------------------------------------------------------
-  // Check 6: Branch-Return Control Flow Isolation
+  // Check 6: Branch-Return Control Flow Isolation (with Valid AST and Positive Control)
   // -------------------------------------------------------------------------
   {
+    // Valid JS snippet with async function so await is syntactically valid in all AST parsers
     const branchCode = `
-      function process(val) {
+      async function process(val) {
         let x = 'clean_initial';
         if (val > 10) {
           x = req.query.tainted;
@@ -204,21 +209,51 @@ export function runSoundnessVerificationSuite(): SoundnessVerificationReport {
         // Branch above returned; x here must remain 'clean_initial'
         await db.query('SELECT * FROM items WHERE id = ' + x);
       }
+      process(req.query.v);
     `;
-    const ast = parseSourceCode(branchCode, 'branch_iso.js').ast;
-    const res = runFlowSensitiveInterproceduralAnalysis(ast, 'branch_iso.js');
-    
-    // The sink on line 9 should NOT be flagged as vulnerable because the tainted branch returned!
-    const sinkVuln = res.vulnerabilities.find(v => v.sink.line === 9);
-    const passed = !sinkVuln;
+    const parseRes = parseSourceCode(branchCode, 'branch_iso.js');
+    const parseOk = parseRes.errors.length === 0 && Boolean(parseRes.ast && parseRes.ast.type === 'Program');
+
+    // Positive control case: When branch DOES NOT return, taint continues and MUST be detected at db.query sink
+    const controlCode = `
+      async function process(val) {
+        let x = 'clean_initial';
+        if (val > 10) {
+          x = req.query.tainted;
+          // Continues without returning: tainted x flows into SQL sink
+        }
+        await db.query('SELECT * FROM items WHERE id = ' + x);
+      }
+      process(req.query.v);
+    `;
+    const controlParseRes = parseSourceCode(controlCode, 'branch_control.js');
+    const controlParseOk = controlParseRes.errors.length === 0 && Boolean(controlParseRes.ast && controlParseRes.ast.type === 'Program');
+    const controlRes = runFlowSensitiveInterproceduralAnalysis(controlParseRes.ast, 'branch_control.js');
+    const controlVuln = controlRes.vulnerabilities.find(v => v.vulnerabilityType === 'SQL_INJECTION');
+    const controlSinkDetected = Boolean(controlVuln);
+
+    // Isolated test case: When branch returns, no vulnerability should be reported at the db.query sink
+    const res = runFlowSensitiveInterproceduralAnalysis(parseRes.ast, 'branch_iso.js');
+    const isolatedVulns = res.vulnerabilities.filter(v => v.vulnerabilityType === 'SQL_INJECTION');
+    const branchIsolated = isolatedVulns.length === 0;
+
+    const passed = parseOk && controlParseOk && controlSinkDetected && branchIsolated && res.flowSensitiveStepsEvaluated > 0;
+
     checks.push({
       checkId: 'SND-06-BRANCH-RETURN-ISOLATION',
       name: 'Terminated Returning Branch Does Not Contaminate Post-If Environment',
       principle: 'BRANCH_ISOLATION',
       passed,
-      expectedBehavior: 'Variables assigned inside a branch that returns must not flow into statements after the if',
-      observedBehavior: sinkVuln ? 'Contamination detected (sink flagged)' : 'Correctly isolated (no sink vulnerability)',
-      evidence: { sinkVulnFound: Boolean(sinkVuln) },
+      expectedBehavior: 'Valid AST parsing, positive control detects SQL sink when branch continues, and returning branch isolates sink with 0 findings',
+      observedBehavior: `parseOk: ${parseOk}, controlSinkDetected: ${controlSinkDetected}, isolatedVulns: ${isolatedVulns.length}, steps: ${res.flowSensitiveStepsEvaluated}`,
+      evidence: {
+        parseErrors: parseRes.errors,
+        controlParseErrors: controlParseRes.errors,
+        controlSinkDetected,
+        controlVulnLine: controlVuln?.sink?.line,
+        isolatedVulnsCount: isolatedVulns.length,
+        flowStepsEvaluated: res.flowSensitiveStepsEvaluated,
+      },
     });
   }
 

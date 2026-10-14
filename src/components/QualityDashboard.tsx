@@ -110,7 +110,7 @@ export const QualityDashboard: React.FC = () => {
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
-            Empirical validation proving AST parsing, CFG reachability, Interprocedural Taint across function boundaries, abstract interpretation soundness invariants, and external benchmark suites (OWASP Benchmark [Java-adapted], Securibench-JS, NodeGoat).
+            Empirically checks selected abstract-interpretation invariants, AST parsing, CFG reachability, Interprocedural Taint across function boundaries, and external benchmark suites (OWASP Benchmark [Java-adapted], Securibench-JS, NodeGoat, and regression suite).
           </p>
         </div>
 
@@ -225,7 +225,7 @@ export const QualityDashboard: React.FC = () => {
           }`}
         >
           <FlaskConical className="w-3.5 h-3.5 text-indigo-400" />
-          <span>External Benchmarks ({externalReport.totalBenchmarks} OWASP/Securibench)</span>
+          <span>External Benchmarks ({externalReport.totalBenchmarks} Cases · OWASP/Securi/NodeGoat/Local)</span>
         </button>
 
         <button
@@ -713,6 +713,12 @@ export const QualityDashboard: React.FC = () => {
                             <span className="text-slate-300">{res.upstreamRepo}</span>
                           </div>
                         )}
+                        {res.upstreamFilePath && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500">Pinned Upstream Path:</span>
+                            <span className="text-slate-300 font-mono text-[9px] bg-slate-950 px-1 py-0.5 rounded border border-slate-800">{res.upstreamFilePath}</span>
+                          </div>
+                        )}
                         {res.upstreamVersionOrCommit && (
                           <div className="flex items-center gap-2">
                             <span className="text-slate-500">Version / Commit:</span>
@@ -722,7 +728,13 @@ export const QualityDashboard: React.FC = () => {
                         {res.originalTestId && (
                           <div className="flex items-center gap-2">
                             <span className="text-slate-500">Original Test ID:</span>
-                            <span className="text-indigo-400">{res.originalTestId}</span>
+                            <span className="text-indigo-400 font-bold">{res.originalTestId}</span>
+                          </div>
+                        )}
+                        {res.referenceHash && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500">Content Reference Hash:</span>
+                            <span className="text-emerald-400 font-mono text-[9px] bg-slate-950 px-1 py-0.5 rounded border border-slate-800">{res.referenceHash}</span>
                           </div>
                         )}
                         <div className="pt-0.5">

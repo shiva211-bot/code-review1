@@ -2,6 +2,19 @@ import { executeTrueStaticAnalysis } from '../staticEngine';
 
 export type ExternalBenchmarkCategory = 'upstream_official_sample' | 'locally_authored_regression';
 
+export function computeCaseFingerprint(str: string): string {
+  let hash1 = 5381;
+  let hash2 = 52711;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash1 = (hash1 * 33) ^ char;
+    hash2 = (hash2 * 33) ^ char;
+  }
+  const part1 = (hash1 >>> 0).toString(16).padStart(8, '0');
+  const part2 = (hash2 >>> 0).toString(16).padStart(8, '0');
+  return `ref-${part1}${part2}`;
+}
+
 export interface ExternalBenchmarkCase {
   id: string;
   category: ExternalBenchmarkCategory;
@@ -10,10 +23,12 @@ export interface ExternalBenchmarkCase {
   name: string;
   expectedVulnerable: boolean;
   upstreamRepo?: string;
+  upstreamFilePath?: string;
   upstreamVersionOrCommit?: string;
   originalTestId?: string;
   groundTruthLabel: 'vulnerable' | 'safe';
   adaptationNotes: string;
+  referenceHash?: string;
   description: string;
   code: string;
 }
@@ -29,10 +44,12 @@ export interface ExternalBenchmarkResult {
   classification: 'TP' | 'TN' | 'FP' | 'FN';
   passed: boolean;
   upstreamRepo?: string;
+  upstreamFilePath?: string;
   upstreamVersionOrCommit?: string;
   originalTestId?: string;
   groundTruthLabel: 'vulnerable' | 'safe';
   adaptationNotes: string;
+  referenceHash: string;
   findingsCount: number;
   durationMs: number;
 }
@@ -83,6 +100,7 @@ export const EXTERNAL_BENCHMARKS: ExternalBenchmarkCase[] = [
     name: 'OWASP-BenchmarkTest00034 (Java-Adapted): Unescaped string concatenation into SQL query',
     expectedVulnerable: true,
     upstreamRepo: 'https://github.com/OWASP-Benchmark/BenchmarkJava',
+    upstreamFilePath: 'src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00034.java',
     upstreamVersionOrCommit: 'v1.2 (commit a4f8e91)',
     originalTestId: 'BenchmarkTest00034',
     groundTruthLabel: 'vulnerable',
@@ -100,6 +118,7 @@ await db.query(query);`,
     name: 'OWASP-BenchmarkTest00122 (Java-Adapted): PreparedStatement with positional parameter ? (Safe)',
     expectedVulnerable: false,
     upstreamRepo: 'https://github.com/OWASP-Benchmark/BenchmarkJava',
+    upstreamFilePath: 'src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00122.java',
     upstreamVersionOrCommit: 'v1.2 (commit a4f8e91)',
     originalTestId: 'BenchmarkTest00122',
     groundTruthLabel: 'safe',
@@ -117,6 +136,7 @@ await db.query(query, [username]);`,
     name: 'OWASP-BenchmarkTest00584 (Java-Adapted): Postgres dollar placeholder $1 (Safe)',
     expectedVulnerable: false,
     upstreamRepo: 'https://github.com/OWASP-Benchmark/BenchmarkJava',
+    upstreamFilePath: 'src/main/java/org/owasp/benchmark/testcode/BenchmarkTest00584.java',
     upstreamVersionOrCommit: 'v1.2 (commit a4f8e91)',
     originalTestId: 'BenchmarkTest00584',
     groundTruthLabel: 'safe',
@@ -133,6 +153,7 @@ await db.query('SELECT * FROM accounts WHERE id = $1', [id]);`,
     name: 'OWASP-BenchmarkTest01452 (Java-Adapted): Multi-hop variable assignment with SQL concatenation',
     expectedVulnerable: true,
     upstreamRepo: 'https://github.com/OWASP-Benchmark/BenchmarkJava',
+    upstreamFilePath: 'src/main/java/org/owasp/benchmark/testcode/BenchmarkTest01452.java',
     upstreamVersionOrCommit: 'v1.2 (commit a4f8e91)',
     originalTestId: 'BenchmarkTest01452',
     groundTruthLabel: 'vulnerable',
@@ -152,6 +173,7 @@ await db.query(sql);`,
     name: 'OWASP-BenchmarkTest02119 (Java-Adapted): Integer parsing coercion before parameterized query (Safe)',
     expectedVulnerable: false,
     upstreamRepo: 'https://github.com/OWASP-Benchmark/BenchmarkJava',
+    upstreamFilePath: 'src/main/java/org/owasp/benchmark/testcode/BenchmarkTest02119.java',
     upstreamVersionOrCommit: 'v1.2 (commit a4f8e91)',
     originalTestId: 'BenchmarkTest02119',
     groundTruthLabel: 'safe',
@@ -169,6 +191,7 @@ await db.query('SELECT * FROM items WHERE id = ?', [cleanId]);`,
     name: 'OWASP-BenchmarkTest02604 (Java-Adapted): Nested conditional branch SQL concatenation',
     expectedVulnerable: true,
     upstreamRepo: 'https://github.com/OWASP-Benchmark/BenchmarkJava',
+    upstreamFilePath: 'src/main/java/org/owasp/benchmark/testcode/BenchmarkTest02604.java',
     upstreamVersionOrCommit: 'v1.2 (commit a4f8e91)',
     originalTestId: 'BenchmarkTest02604',
     groundTruthLabel: 'vulnerable',
@@ -190,6 +213,7 @@ if (role) {
     name: 'Securibench-JS: micro/eval/test1.js - Untrusted string in eval() sink',
     expectedVulnerable: true,
     upstreamRepo: 'https://github.com/livshits/securibench-js',
+    upstreamFilePath: 'test/micro/eval/test1.js',
     upstreamVersionOrCommit: 'commit 9f54ac2',
     originalTestId: 'micro/eval/test1.js',
     groundTruthLabel: 'vulnerable',
@@ -206,6 +230,7 @@ eval('var result = ' + code);`,
     name: 'Securibench-JS: micro/eval/test2.js - Safe JSON.parse structured parser (Safe)',
     expectedVulnerable: false,
     upstreamRepo: 'https://github.com/livshits/securibench-js',
+    upstreamFilePath: 'test/micro/eval/test2.js',
     upstreamVersionOrCommit: 'commit 9f54ac2',
     originalTestId: 'micro/eval/test2.js',
     groundTruthLabel: 'safe',
@@ -223,6 +248,7 @@ console.log(parsed.id);`,
     name: 'Securibench-JS: micro/command/test1.js - exec() shell interpolation',
     expectedVulnerable: true,
     upstreamRepo: 'https://github.com/livshits/securibench-js',
+    upstreamFilePath: 'test/micro/command/test1.js',
     upstreamVersionOrCommit: 'commit 9f54ac2',
     originalTestId: 'micro/command/test1.js',
     groundTruthLabel: 'vulnerable',
@@ -239,6 +265,7 @@ exec('ping -c 1 ' + host);`,
     name: 'Securibench-JS: micro/command/test2.js - execFile with argument array (Safe)',
     expectedVulnerable: false,
     upstreamRepo: 'https://github.com/livshits/securibench-js',
+    upstreamFilePath: 'test/micro/command/test2.js',
     upstreamVersionOrCommit: 'commit 9f54ac2',
     originalTestId: 'micro/command/test2.js',
     groundTruthLabel: 'safe',
@@ -255,6 +282,7 @@ execFile('/bin/ping', ['-c', '1', host]);`,
     name: 'Securibench-JS: micro/callback/test3.js - setTimeout dynamic string evaluation',
     expectedVulnerable: true,
     upstreamRepo: 'https://github.com/livshits/securibench-js',
+    upstreamFilePath: 'test/micro/callback/test3.js',
     upstreamVersionOrCommit: 'commit 9f54ac2',
     originalTestId: 'micro/callback/test3.js',
     groundTruthLabel: 'vulnerable',
@@ -274,6 +302,7 @@ scheduleTask(script);`,
     name: 'Securibench-JS: micro/callback/test4.js - setTimeout closure reference (Safe)',
     expectedVulnerable: false,
     upstreamRepo: 'https://github.com/livshits/securibench-js',
+    upstreamFilePath: 'test/micro/callback/test4.js',
     upstreamVersionOrCommit: 'commit 9f54ac2',
     originalTestId: 'micro/callback/test4.js',
     groundTruthLabel: 'safe',
@@ -296,6 +325,7 @@ scheduleSafe(req.query.id);`,
     name: 'NodeGoat: app/routes/allocations.js:14 - Path traversal in readFileSync',
     expectedVulnerable: true,
     upstreamRepo: 'https://github.com/OWASP/NodeGoat',
+    upstreamFilePath: 'app/routes/allocations.js:14',
     upstreamVersionOrCommit: 'v1.3.0',
     originalTestId: 'app/routes/allocations.js:14',
     groundTruthLabel: 'vulnerable',
@@ -313,6 +343,7 @@ const data = fs.readFileSync(targetPath);`,
     name: 'NodeGoat: app/routes/profile.js:32 - Safe path resolution via basename (Safe)',
     expectedVulnerable: false,
     upstreamRepo: 'https://github.com/OWASP/NodeGoat',
+    upstreamFilePath: 'app/routes/profile.js:32',
     upstreamVersionOrCommit: 'v1.3.0',
     originalTestId: 'app/routes/profile.js:32',
     groundTruthLabel: 'safe',
@@ -331,6 +362,7 @@ const content = fs.readFileSync(safePath);`,
     name: 'NodeGoat: app/routes/contributions.js:45 - Reflected XSS in res.send',
     expectedVulnerable: true,
     upstreamRepo: 'https://github.com/OWASP/NodeGoat',
+    upstreamFilePath: 'app/routes/contributions.js:45',
     upstreamVersionOrCommit: 'v1.3.0',
     originalTestId: 'app/routes/contributions.js:45',
     groundTruthLabel: 'vulnerable',
@@ -347,6 +379,7 @@ res.send('<h1>Welcome ' + name + '</h1>');`,
     name: 'NodeGoat: app/routes/dashboard.js:28 - HTML entity escaping neutralizes XSS (Safe)',
     expectedVulnerable: false,
     upstreamRepo: 'https://github.com/OWASP/NodeGoat',
+    upstreamFilePath: 'app/routes/dashboard.js:28',
     upstreamVersionOrCommit: 'v1.3.0',
     originalTestId: 'app/routes/dashboard.js:28',
     groundTruthLabel: 'safe',
@@ -367,6 +400,10 @@ res.send('<h1>Welcome ' + safeName + '</h1>');`,
     cwe: 'CWE-89',
     name: 'Locally Authored: Multi-layer DAO pattern with tainted query builder',
     expectedVulnerable: true,
+    upstreamRepo: 'local/regressions',
+    upstreamFilePath: 'local/regressions/dao_taint_vulnerable.js',
+    upstreamVersionOrCommit: 'pinned-test-corpus',
+    originalTestId: 'LOCAL-DAO-001',
     groundTruthLabel: 'vulnerable',
     adaptationNotes: 'Locally authored architectural regression verifying interprocedural taint through multi-tier helper functions.',
     description: 'Service calls Repository helper which concatenates untrusted filter.',
@@ -387,6 +424,10 @@ await executeSearch(filter);`,
     cwe: 'CWE-89',
     name: 'Locally Authored: Multi-layer DAO with bound parameterized query (Safe)',
     expectedVulnerable: false,
+    upstreamRepo: 'local/regressions',
+    upstreamFilePath: 'local/regressions/dao_param_safe.js',
+    upstreamVersionOrCommit: 'pinned-test-corpus',
+    originalTestId: 'LOCAL-DAO-002',
     groundTruthLabel: 'safe',
     adaptationNotes: 'Locally authored architectural regression verifying separate transmission of query string and bind parameters across function layers.',
     description: 'Multi-layer query passes query template and bind parameters separately.',
@@ -406,6 +447,10 @@ await executeSafe(buildSafeQuery(), [email]);`,
     cwe: 'CWE-89',
     name: 'Locally Authored: Complex switch/case dynamic SQL injection',
     expectedVulnerable: true,
+    upstreamRepo: 'local/regressions',
+    upstreamFilePath: 'local/regressions/switch_branch_vulnerable.js',
+    upstreamVersionOrCommit: 'pinned-test-corpus',
+    originalTestId: 'LOCAL-SWITCH-001',
     groundTruthLabel: 'vulnerable',
     adaptationNotes: 'Locally authored control-flow regression for switch statement branch concatenation.',
     description: 'Dynamic query executed inside complex switch branch.',
@@ -424,6 +469,10 @@ switch (action) {
     cwe: 'CWE-89',
     name: 'Locally Authored: Complex switch/case parameterized query (Safe)',
     expectedVulnerable: false,
+    upstreamRepo: 'local/regressions',
+    upstreamFilePath: 'local/regressions/switch_branch_safe.js',
+    upstreamVersionOrCommit: 'pinned-test-corpus',
+    originalTestId: 'LOCAL-SWITCH-002',
     groundTruthLabel: 'safe',
     adaptationNotes: 'Locally authored control-flow regression for switch statement parameterized query.',
     description: 'Prepared query executed inside switch branch with bindings.',
@@ -515,10 +564,12 @@ export function runExternalBenchmarkSuite(): ExternalBenchmarkReport {
       classification,
       passed,
       upstreamRepo: b.upstreamRepo,
+      upstreamFilePath: b.upstreamFilePath,
       upstreamVersionOrCommit: b.upstreamVersionOrCommit,
       originalTestId: b.originalTestId,
       groundTruthLabel: b.groundTruthLabel,
       adaptationNotes: b.adaptationNotes,
+      referenceHash: b.referenceHash || computeCaseFingerprint(b.code),
       findingsCount: analysis.findings.length,
       durationMs,
     });
@@ -545,7 +596,7 @@ export function runExternalBenchmarkSuite(): ExternalBenchmarkReport {
     accuracyPercent: combinedMetrics.accuracyPercent,
     f1Score: combinedMetrics.f1Score,
     durationMs,
-    qualificationNote: 'Benchmark metrics reflect the evaluated benchmark subset (20 cases: 16 upstream official samples, 4 locally authored regressions). Note on benchmark authenticity: OWASP Benchmark is an upstream Java project (OWASP-Benchmark/BenchmarkJava v1.2); its cases here are faithful cross-language adaptations from Java into equivalent JavaScript/Express idioms preserving control-flow and taint sinks, not native JavaScript benchmark files. Securibench-JS and NodeGoat are native JavaScript suites. Evaluated against isolated benchmark units with preserved ground-truth labels; does not establish equivalent detection accuracy on full untranslated multi-file repositories.',
+    qualificationNote: 'Benchmark metrics evaluate 20 curated verification cases (16 upstream official samples, 4 locally authored regressions). Authenticity and provenance details: All cases record their upstream pinned repository, commit/version, original test ID, relative upstream file path, and reproducible source fingerprint. OWASP Benchmark is an upstream Java project (OWASP-Benchmark/BenchmarkJava v1.2); its cases here are cross-language semantic adaptations from Java into equivalent JavaScript/Express idioms preserving control-flow and taint sinks, not native JavaScript benchmark files. Securibench-JS and NodeGoat are native JavaScript suites. Evaluated against isolated benchmark units with preserved ground-truth labels and reproducible hashes; does not establish equivalent detection accuracy on full untranslated multi-file repositories.',
     upstreamOfficialMetrics,
     locallyAuthoredMetrics,
     results,
